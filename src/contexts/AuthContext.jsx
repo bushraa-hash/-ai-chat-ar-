@@ -12,6 +12,9 @@ export const AuthProvider = ({ children }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+    }).catch((err) => {
+      console.error("Session error:", err);
+      setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -55,7 +58,11 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={{ user, session, login, register, logout, resetPassword, loading }}>
-      {!loading && children}
+      {loading ? (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+           جاري التحميل...
+        </div>
+      ) : children}
     </AuthContext.Provider>
   );
 };

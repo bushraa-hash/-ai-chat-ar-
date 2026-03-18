@@ -61,16 +61,6 @@ export default function Dashboard() {
     }
   }, [user, currentSessionId]);
 
-  useEffect(() => {
-    if(!user) {
-        navigate('/login');
-        return;
-    }
-    fetchMemories();
-    fetchSessions();
-    checkForLegacyChats();
-  }, [user, navigate, fetchMemories, fetchSessions, checkForLegacyChats]);
-
   const checkForLegacyChats = useCallback(async () => {
     if (!user) return;
     // Check if there are chats with no session_id
@@ -85,6 +75,16 @@ export default function Dashboard() {
        console.log("Legacy chats found. Requesting user to migrate.");
     }
   }, [user]);
+
+  useEffect(() => {
+    if(!user) {
+        navigate('/login');
+        return;
+    }
+    fetchMemories();
+    fetchSessions();
+    checkForLegacyChats();
+  }, [user, navigate, fetchMemories, fetchSessions, checkForLegacyChats]);
 
   useEffect(() => {
     scrollToBottom();

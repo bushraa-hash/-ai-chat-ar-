@@ -178,8 +178,8 @@ export default function Dashboard() {
       }));
 
       // 4. Get AI Response with Multi-Model Fallback
-      // Support for most stable models first to avoid quota issues
-      const modelsToTry = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"];
+      // Using more robust model names for v1beta
+      const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-2.0-flash-exp"];
       let aiText = "";
       let success = false;
       let lastErrorMessage = "";
@@ -253,7 +253,7 @@ export default function Dashboard() {
       const prompt = `المستخدم قال: "${userText}"\nالمساعد رد: "${aiText}"`;
       const systemInstruction = "أنت خبير في استخراج الحقائق والاهتمامات عن المستخدمين. استخرج أي حقيقة جديدة هامة ذكرها المستخدم في الرسالة التالية (مثل اسمه، عمله، تفضيلاته، مدينته). إذا لم توجد حقيقة هامة جديدة، أجب بكلمة 'NONE'. إذا وجدت أكثر من حقيقة، افصل بينهم بفاصلة.";
       
-      const mNames = ["gemini-1.5-flash"];
+      const mNames = ["gemini-1.5-flash-8b", "gemini-1.5-flash"];
       let fact = "";
 
       for (const mName of mNames) {

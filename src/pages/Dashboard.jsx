@@ -48,6 +48,30 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
+    if(!user) {
+        navigate('/login');
+        return;
+    }
+    fetchMemories();
+    checkForLegacyChats();
+  }, [user]);
+
+  const checkForLegacyChats = async () => {
+    // Check if there are chats with no session_id
+    const { data, error } = await supabase
+      .from('chats')
+      .select('id')
+      .is('session_id', null)
+      .eq('user_id', user.id)
+      .limit(1);
+    
+    if (!error && data && data.length > 0) {
+       console.log("Legacy chats found. Requesting user to migrate.");
+       // We can trigger a migration later or just show a button.
+    }
+  };
+
+  useEffect(() => {
     scrollToBottom();
   }, [messages]);
 

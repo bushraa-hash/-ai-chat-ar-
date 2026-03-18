@@ -3,15 +3,16 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { getGeminiModel } from '../lib/gemini';
 import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
 import { ChatMessage } from '../components/chat/ChatMessage';
-import { Send, Loader2, Bot } from 'lucide-react';
+import { Sidebar } from '../components/layout/Sidebar';
+import { Send, Loader2, Bot, Menu, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function Dashboard() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [apiError, setApiError] = useState('');
   const { user } = useAuth();
   const messagesEndRef = useRef(null);
@@ -67,16 +68,23 @@ export default function Dashboard() {
     setApiError('');
 
     try {
-      // 1. Get AI Response
+      // 1. Prepare history for Gemini
+      const history = messages.map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.content }]
+      }));
+
+      // 2. Get AI Response with Context (Memory)
       const model = getGeminiModel();
-      const result = await model.generateContent(userMessageText);
+      const chat = model.startChat({ history });
+      const result = await chat.sendMessage(userMessageText);
       const response = await result.response;
       const aiText = response.text();
       const aiMessage = { role: 'ai', content: aiText };
 
       setMessages(prev => [...prev, aiMessage]);
 
-      // 2. Save to Supabase (Best effort)
+      // 3. Save to Supabase (Best effort)
       try {
            await supabase.from('chats').insert([
                { user_id: user.id, role: 'user', content: userMessageText },
@@ -88,91 +96,147 @@ export default function Dashboard() {
       
     } catch (error) {
       console.error('Chat error:', error);
-      setMessages(prev => prev.slice(0, -1)); // optionally remove user message or show error mark
+      setMessages(prev => prev.slice(0, -1)); 
       setApiError(error.message || 'حدث خطأ غير متوقع أثناء التواصل مع الذكاء الاصطناعي.');
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div className="flex flex-col h-[calc(100vh-64px)] bg-slate-50 dark:bg-gray-900 transition-colors">
-      
-      {apiError && (
-          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 m-4" role="alert">
-            <p>{apiError}</p>
-          </div>
-      )}
+  const handleNewChat = () => {
+    setMessages([]);
+    setApiError('');
+  };
 
-      {/* Main Chat Area */}
-      <main className="flex-1 flex flex-col overflow-hidden max-w-5xl mx-auto w-full p-4 md:p-6 lg:p-8">
+  return (
+    <div className="flex h-[calc(100vh-64px)] bg-slate-50 dark:bg-gray-900 transition-colors overflow-hidden">
+      
+      {/* Sidebar */}
+      <Sidebar 
+        onNewChat={handleNewChat} 
+        chats={[]} // For now we use a single chat stream, can be expanded to multi-chat sessions
+        currentChatId={null}
+      />
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col min-w-0 relative">
         
-        {/* Messages List */}
-        <div className="flex-1 overflow-y-auto mb-6 p-4 md:p-6 bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700">
-          {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center px-4">
-              <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900 text-purple-600 rounded-full flex items-center justify-center mb-4">
-                 <Bot size={32} />
-              </div>
-              <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-2">مرحباً بك!</h3>
-              <p className="text-gray-500 dark:text-gray-400 max-w-sm">أنا مساعدك الذكي مستعد للإجابة على جميع أسئلتك. كيف يمكنني مساعدتك اليوم؟</p>
+        {/* Mobile Header (Hidden on MD) */}
+        <div className="md:hidden flex items-center justify-between p-4 glass border-b border-gray-100 dark:border-gray-800">
+           <div className="flex items-center gap-2 font-bold text-purple-600">
+              <Bot size={24} />
+              <span>مساعدي</span>
+           </div>
+           <Button variant="ghost" size="sm" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+              <Menu size={20} />
+           </Button>
+        </div>
+
+        {apiError && (
+            <div className="bg-red-50 border-r-4 border-red-500 text-red-700 p-4 m-4 rounded-xl animate-slide-up" role="alert">
+              <p className="text-sm font-medium">{apiError}</p>
             </div>
-          ) : (
-            <div className="space-y-2">
-              {messages.map((msg, index) => (
-                <ChatMessage key={index} message={msg.content} isAI={msg.role === 'ai'} />
-              ))}
-              {loading && (
-                 <div className="flex w-full mb-6 justify-start">
-                 <div className="flex max-w-[80%] items-start gap-4 flex-row">
-                   <div className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center shadow-md bg-gradient-to-br from-purple-500 to-indigo-500 text-white">
-                      <Bot size={20} />
-                   </div>
-                   <div className="px-5 py-3.5 rounded-2xl shadow-sm text-sm md:text-base leading-relaxed bg-white border border-gray-100 text-gray-800 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 rounded-tr-none flex items-center gap-2">
-                     <Loader2 className="w-4 h-4 animate-spin text-purple-600" /> يكتب...
+        )}
+
+        {/* Main Chat Area */}
+        <main className="flex-1 flex flex-col overflow-hidden max-w-4xl mx-auto w-full px-4 md:px-6 relative">
+          
+          {/* Welcome Header */}
+          {messages.length > 0 && (
+             <div className="pt-6 pb-2 border-b border-gray-100 dark:border-gray-800 mb-6 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-gray-500 text-sm">
+                   <Sparkles size={16} className="text-amber-500" />
+                   <span>محادثة ذكية</span>
+                </div>
+                <div className="text-xs text-gray-400">
+                   {messages.length} رسائل
+                </div>
+             </div>
+          )}
+
+          {/* Messages List */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar pt-4">
+            {messages.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center px-4 animate-slide-up">
+                <div className="w-20 h-20 bg-gradient-to-tr from-purple-100 to-indigo-100 dark:from-purple-900/30 dark:to-indigo-900/30 text-purple-600 dark:text-purple-400 rounded-3xl flex items-center justify-center mb-6 shadow-xl shadow-purple-200/50 dark:shadow-none rotate-3">
+                   <Bot size={40} />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">مرحباً بك في مساعدك الذكي!</h3>
+                <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto leading-relaxed">
+                   أنا هنا لمساعدتك في كل شيء، من كتابة الكود إلى الإجابة على استفساراتك اليومية. 
+                   <br/> <span className="text-purple-600 dark:text-purple-400 font-medium italic mt-2 block">لقد أصبحت الآن أتذكر سياق حديثنا!</span>
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-10 w-full max-w-lg">
+                   {['كيف يمكنني تحسين كود React؟', 'اكتب لي قصيدة عن التقنية', 'اشرح لي مفهوم الـ API', 'ما هي أفضل الممارسات في الـ CSS؟'].map((suggest, i) => (
+                      <button 
+                        key={i}
+                        onClick={() => { setInput(suggest); }}
+                        className="p-3 text-sm text-right bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl hover:border-purple-300 dark:hover:border-purple-700 hover:shadow-md transition-all text-gray-600 dark:text-gray-400"
+                      >
+                        {suggest}
+                      </button>
+                   ))}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2 pb-10">
+                {messages.map((msg, index) => (
+                  <ChatMessage key={index} message={msg.content} isAI={msg.role === 'ai'} />
+                ))}
+                {loading && (
+                   <div className="flex w-full mb-8 justify-start animate-pulse">
+                   <div className="flex max-w-[80%] items-start gap-4 flex-row">
+                     <div className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center shadow-lg bg-gradient-to-br from-purple-500 to-indigo-600 text-white">
+                        <Bot size={20} />
+                     </div>
+                     <div className="px-5 py-4 rounded-3xl shadow-sm bg-white border border-gray-100 text-gray-400 dark:bg-gray-800 dark:border-gray-700 rounded-tr-none flex items-center gap-3">
+                       <Loader2 className="w-4 h-4 animate-spin text-purple-600" /> 
+                       <span className="text-sm font-medium">يفكر الآن...</span>
+                     </div>
                    </div>
                  </div>
-               </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-          )}
-        </div>
-
-        {/* Input Area */}
-        <div className="flex-none pb-4 md:pb-6">
-          <form onSubmit={handleSend} className="relative flex items-center w-full max-w-3xl mx-auto">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="اسألني عن أي شيء..."
-              className="block w-full rounded-full border-0 py-4 px-6 pe-16 text-gray-900 shadow-lg ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-purple-600 sm:text-base sm:leading-6 dark:bg-gray-800 dark:text-white dark:ring-gray-700 dark:placeholder-gray-500 resize-none h-14 overflow-hidden"
-              rows={1}
-              onKeyDown={(e) => {
-                if(e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend(e);
-                }
-              }}
-            />
-            <button
-              type="submit"
-              disabled={loading || !input.trim()}
-              className="absolute left-2 top-2 p-2.5 rounded-full bg-purple-600 text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group"
-            >
-              {loading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Send className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              )}
-            </button>
-          </form>
-          <div className="text-center mt-2 text-xs text-gray-400">
-             يمكن للذكاء الاصطناعي أن يخطئ، لذا يرجى التحقق من المعلومات المهمة.
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+            )}
           </div>
-        </div>
 
-      </main>
+          {/* Input Area */}
+          <div className="flex-none pt-4 pb-6 glass z-10 sticky bottom-0 -mx-4 px-4 sm:-mx-6 sm:px-6">
+            <form onSubmit={handleSend} className="relative flex items-center w-full max-w-3xl mx-auto group">
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-3xl blur-md opacity-20 group-focus-within:opacity-40 transition-opacity"></div>
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="اسألني عن أي شيء..."
+                className="relative block w-full rounded-3xl border-0 py-4 px-6 pe-16 text-gray-900 shadow-xl ring-1 ring-inset ring-gray-200 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-purple-600 sm:text-base sm:leading-6 dark:bg-gray-900/90 dark:text-white dark:ring-gray-700 dark:placeholder-gray-500 resize-none h-14 overflow-hidden focus:h-auto max-h-40"
+                rows={1}
+                onKeyDown={(e) => {
+                  if(e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend(e);
+                  }
+                }}
+              />
+              <button
+                type="submit"
+                disabled={loading || !input.trim()}
+                className="absolute left-2.5 top-2 p-2.5 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 shadow-lg shadow-purple-500/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed group active:scale-95"
+              >
+                {loading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Send className="w-5 h-5 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                )}
+              </button>
+            </form>
+            <div className="text-center mt-3 text-xs text-gray-400 dark:text-gray-500">
+               مدعوم بـ <span className="font-semibold text-purple-500">Gemini AI</span> • يتذكر السياق تلقائياً
+            </div>
+          </div>
+
+        </main>
+      </div>
     </div>
   );
 }

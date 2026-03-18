@@ -159,7 +159,7 @@ export default function Dashboard() {
       }));
 
       // 4. Get AI Response with Multi-Model Fallback
-      const modelsToTry = ["models/gemini-1.5-flash", "gemini-1.5-flash", "models/gemini-pro"];
+      const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-pro"];
       let aiText = "";
       let success = false;
       let lastErrorMessage = "";
@@ -203,10 +203,10 @@ export default function Dashboard() {
       // 6. Background Activity: Extract and Save New Memories (Facts about user)
       if (success) extractAndSaveMemory(userMessageText, aiText);
       
-    } catch {
-      console.error('Chat error');
+    } catch (error) {
+      console.error('Chat error:', error);
       setMessages(prev => prev.slice(0, -1)); 
-      setApiError('حدث خطأ غير متوقع أثناء التواصل مع الذكاء الاصطناعي.');
+      setApiError(error.message || 'حدث خطأ غير متوقع أثناء التواصل مع الذكاء الاصطناعي.');
     } finally {
       setLoading(false);
     }
@@ -217,7 +217,7 @@ export default function Dashboard() {
       const prompt = `المستخدم قال: "${userText}"\nالمساعد رد: "${aiText}"`;
       const systemInstruction = "أنت خبير في استخراج الحقائق والاهتمامات عن المستخدمين. استخرج أي حقيقة جديدة هامة ذكرها المستخدم في الرسالة التالية (مثل اسمه، عمله، تفضيلاته، مدينته). إذا لم توجد حقيقة هامة جديدة، أجب بكلمة 'NONE'. إذا وجدت أكثر من حقيقة، افصل بينهم بفاصلة.";
       
-      const mNames = ["gemini-1.5-flash", "gemini-pro"];
+      const mNames = ["gemini-1.5-flash", "gemini-1.5-pro"];
       let fact = "";
 
       for (const mName of mNames) {

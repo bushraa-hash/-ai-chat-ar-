@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [apiError, setApiError] = useState('');
+  const [memories, setMemories] = useState([]);
   const { user } = useAuth();
   const messagesEndRef = useRef(null);
   const navigate = useNavigate();
@@ -28,7 +29,23 @@ export default function Dashboard() {
         navigate('/login');
         return;
     }
+    fetchMemories();
   }, [user]);
+
+  const fetchMemories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('user_memories')
+        .select('fact')
+        .eq('user_id', user.id);
+      
+      if (!error && data) {
+         setMemories(data.map(m => m.fact));
+      }
+    } catch (err) {
+      console.warn("Could not fetch memories:", err);
+    }
+  };
 
   useEffect(() => {
     scrollToBottom();
@@ -91,14 +108,19 @@ export default function Dashboard() {
         setCurrentSessionId(sessionId);
       }
 
-      // 2. Prepare history for Gemini
+      // 2. Prepare System Instruction (Long-Term Memory)
+      const systemPrompt = memories.length > 0 
+        ? `أنت مساعد ذكي يتذكر معلومات هامة عن المستخدم لتحسين تجربته. هذه حقائق تعرفها عنه بالفعل: \n- ${memories.join('\n- ')}\n\nتواصل معه بناءً على هذا السياق.`
+        : "أنت مساعد ذكي مفيد وودود جداً يتحدث باللغة العربية.";
+
+      // 3. Prepare history for Gemini
       const history = messages.map(msg => ({
         role: msg.role === 'user' ? 'user' : 'model',
         parts: [{ text: msg.content }]
       }));
 
-      // 3. Get AI Response with Context (Memory)
-      const model = getGeminiModel();
+      // 4. Get AI Response with Context (Memory)
+      const model = getGeminiModel(systemPrompt);
       const chat = model.startChat({ history });
       const result = await chat.sendMessage(userMessageText);
       const response = await result.response;
@@ -107,15 +129,18 @@ export default function Dashboard() {
 
       setMessages(prev => [...prev, aiMessage]);
 
-      // 4. Save messages to Supabase linked to session
+      // 5. Save messages to Supabase
       try {
            await supabase.from('chats').insert([
                { user_id: user.id, session_id: sessionId, role: 'user', content: userMessageText },
                { user_id: user.id, session_id: sessionId, role: 'ai', content: aiText }
            ]);
       } catch (dbErr) {
-           console.warn("Could not save to db (perhaps table not created or schema not updated):", dbErr);
+           console.warn("Could not save to db:", dbErr);
       }
+
+      // 6. Background Activity: Extract and Save New Memories (Facts about user)
+      extractAndSaveMemory(userMessageText, aiText);
       
     } catch (error) {
       console.error('Chat error:', error);
@@ -123,6 +148,21 @@ export default function Dashboard() {
       setApiError(error.message || 'حدث خطأ غير متوقع أثناء التواصل مع الذكاء الاصطناعي.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const extractAndSaveMemory = async (userText, aiText) => {
+    try {
+      const model = getGeminiModel("أنت خبير في استخراج الحقائق والاهتمامات عن المستخدمين. استخرج أي حقيقة جديدة هامة ذكرها المستخدم في الرسالة التالية (مثل اسمه، عمله، تفضيلاته، مدينته). إذا لم توجد حقيقة هامة جديدة، أجب بكلمة 'NONE'. إذا وجدت أكثر من حقيقة، افصل بينهم بفاصلة.");
+      const result = await model.generateContent(`المستخدم قال: "${userText}"\nالمساعد رد: "${aiText}"`);
+      const fact = (await result.response).text().trim();
+      
+      if (fact && fact !== 'NONE' && !memories.some(m => fact.includes(m))) {
+        await supabase.from('user_memories').insert([{ user_id: user.id, fact }]);
+        setMemories(prev => [...prev, fact]);
+      }
+    } catch (err) {
+      console.warn("Memory extraction failed:", err);
     }
   };
 

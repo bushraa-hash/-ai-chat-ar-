@@ -13,7 +13,7 @@ export const initGemini = (apiKey) => {
   }
 };
 
-export const getGeminiModel = () => {
+export const getGeminiModel = (systemInstruction) => {
     if(!genAI) {
         initGemini();
     }
@@ -21,5 +21,8 @@ export const getGeminiModel = () => {
         throw new Error("عذراً، يجب إعداد مفتاح Google API في الإعدادات أولاً.");
     }
     
-    return genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+    return genAI.getGenerativeModel({ 
+        model: "gemini-1.5-flash",
+        systemInstruction: systemInstruction 
+    });
 }

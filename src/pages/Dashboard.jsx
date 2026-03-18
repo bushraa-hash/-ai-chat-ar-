@@ -32,18 +32,25 @@ export default function Dashboard() {
     fetchMemories();
   }, [user]);
 
-  const fetchMemories = async () => {
+  const fetchSessions = async () => {
     try {
       const { data, error } = await supabase
-        .from('user_memories')
-        .select('fact')
-        .eq('user_id', user.id);
+        .from('sessions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
       
-      if (!error && data) {
-         setMemories(data.map(m => m.fact));
+      if (error) throw error;
+      setSessions(data || []);
+      
+      // If we have sessions but none are current, pick the first one
+      if (data && data.length > 0 && !currentSessionId) {
+        setCurrentSessionId(data[0].id);
+        fetchMessages(data[0].id);
       }
+      // If NO sessions exist at all, we'll wait for the first message or create one
     } catch (err) {
-      console.warn("Could not fetch memories:", err);
+      console.error('Error fetching sessions:', err);
     }
   };
 
@@ -53,6 +60,7 @@ export default function Dashboard() {
         return;
     }
     fetchMemories();
+    fetchSessions(); // Added fetchSessions
     checkForLegacyChats();
   }, [user]);
 
@@ -105,31 +113,32 @@ export default function Dashboard() {
     e.preventDefault();
     if (!input.trim() || !user) return;
 
-    let sessionId = currentSessionId;
-    const isNewSession = !sessionId;
-
-    const userMessageText = input;
-    const userMessage = { role: 'user', content: userMessageText };
-    setInput('');
-    setMessages(prev => [...prev, userMessage]);
-    setLoading(true);
-    setApiError('');
-
     try {
-      // 1. Create session if it doesn't exist
-      if (isNewSession) {
-        const { data: sessionData, error: sessionErr } = await supabase
+      const userMessageText = input.trim();
+      setInput('');
+      setError(''); // Clear previous errors
+
+      const userMessage = { role: 'user', content: userMessageText };
+      setMessages(prev => [...prev, userMessage]);
+      setLoading(true);
+
+      // Ensure we have a session
+      let sessionId = currentSessionId;
+      if (!sessionId) {
+        console.log("No current session, creating one...");
+        const { data: newSession, error: sErr } = await supabase
           .from('sessions')
-          .insert([{ 
-            user_id: user.id, 
-            title: userMessageText.substring(0, 30) + (userMessageText.length > 30 ? '...' : '') 
-          }])
+          .insert([{ user_id: user.id, title: userMessageText.substring(0, 30) || "محادثة جديدة" }])
           .select()
           .single();
         
-        if (sessionErr) throw sessionErr;
-        sessionId = sessionData.id;
+        if (sErr) {
+            console.error("Session creation failed:", sErr);
+            throw new Error(`فشل إنشاء الجلسة: ${sErr.message}. تأكد من تشغيل أكواد SQL المطلوبة.`);
+        }
+        sessionId = newSession.id;
         setCurrentSessionId(sessionId);
+        setSessions(prev => [newSession, ...prev]); // Add new session to the list
       }
 
       // 2. Prepare System Instruction (Long-Term Memory)

@@ -18,6 +18,7 @@ export default function Dashboard() {
   const [memories, setMemories] = useState([]);
   const { user } = useAuth();
   const messagesEndRef = useRef(null);
+  const isInitialLoad = useRef(true);
   const navigate = useNavigate();
 
   const scrollToBottom = () => {
@@ -51,10 +52,10 @@ export default function Dashboard() {
       
       if (error) throw error;
       
-      // If we have sessions but none are current, pick the first one
-      if (data && data.length > 0 && !currentSessionId) {
-        setCurrentSessionId(data[0].id);
-        fetchMessages(data[0].id);
+      // We no longer auto-select the first session on initial load. 
+      // The user wants to start with a fresh 'New Chat' screen.
+      if (isInitialLoad.current) {
+          isInitialLoad.current = false;
       }
     } catch {
       console.error('Error fetching sessions');

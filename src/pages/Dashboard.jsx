@@ -95,6 +95,8 @@ export default function Dashboard() {
       setMessages([]);
       return;
     }
+    // Clear messages before fetching so it doesn't show previous chat while loading or if it fails
+    setMessages([]);
     try {
       const { data, error } = await supabase
         .from('chats')
@@ -103,8 +105,8 @@ export default function Dashboard() {
         .order('created_at', { ascending: true });
 
       if (error) {
-           console.log("Supabase error (expected if table not created yet):", error);
-           // If table doesn't exist, we just start with empty messages and don't block the UI
+           console.error("Supabase error viewing chats:", error);
+           setApiError(`خطأ في قاعدة البيانات: ${error.message} - تأكد من صلاحيات الجداول.`);
            return;
       }
       
@@ -200,12 +202,19 @@ export default function Dashboard() {
 
       // 5. Save messages to Supabase
       try {
-           await supabase.from('chats').insert([
+           const { error: dbErr } = await supabase.from('chats').insert([
                { user_id: user.id, session_id: sessionId, role: 'user', content: userMessageText },
                { user_id: user.id, session_id: sessionId, role: 'ai', content: aiText }
            ]);
-      } catch (dbErr) {
-           console.warn("Could not save to db:", dbErr);
+           if (dbErr) {
+               console.error("Insert error:", dbErr);
+               setApiError(`تنبيه: المحادثة تعمل ولكن لم يتم حفظها في قاعدة البيانات (${dbErr.message}). قد تحتاج إلى تفعيل RLS أو إنشاء جدول chats.`);
+           } else {
+               // Update Sidebar proactively if it's a new session, or let it sync
+               fetchSessions();
+           }
+      } catch (dbCatchErr) {
+           console.warn("Could not save to db:", dbCatchErr);
       }
 
       // 6. Background Activity: Extract and Save New Memories (Facts about user)

@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Bot } from 'lucide-react';
+import { Bot, Sparkles } from 'lucide-react';
 
 export default function Register() {
   const [name, setName] = useState('');
@@ -13,6 +13,7 @@ export default function Register() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
@@ -28,14 +29,39 @@ export default function Register() {
       setMessage('');
       setLoading(true);
       await register(email, password, name);
-      setMessage('نجاح! تحقق من بريدك الإلكتروني لتفعيل الحساب.');
-      setTimeout(() => navigate('/login'), 3000);
-    } catch {
+      setIsSuccess(true);
+      setMessage('تم إنشاء الحساب بنجاح! يرجى التحقق من بريدك الإلكتروني لتفعيل الحساب قبل تسجيل الدخول.');
+    } catch (err) {
+      console.error(err);
       setError('فشل إنشاء الحساب. تأكد من صحة البيانات أو حاول ببريد آخر.');
     } finally {
       setLoading(false);
     }
   };
+
+  if (isSuccess) {
+    return (
+      <div className="min-h-[calc(100vh-64px)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-slate-50 dark:bg-gray-900 transition-colors">
+        <div className="max-w-md w-full space-y-8 bg-white dark:bg-gray-800 p-8 sm:p-10 rounded-2xl shadow-xl text-center animate-slide-up">
+          <div className="mx-auto w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400 mb-6 shadow-inner">
+              <Sparkles size={40} />
+          </div>
+          <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white">تفقد بريدك الإلكتروني!</h2>
+          <p className="mt-4 text-gray-600 dark:text-gray-400 leading-relaxed text-lg">
+            {message}
+          </p>
+          <div className="mt-8 space-y-4">
+             <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-blue-700 dark:text-blue-300 text-sm border border-blue-100 dark:border-blue-800 text-right">
+                <p>💡 <b>ملاحظة:</b> إذا لم تجد الرسالة في صندوق الوارد، يرجى التحقق من قسم الرسائل غير المرغوب فيها (Spam).</p>
+             </div>
+             <Button onClick={() => navigate('/login')} className="w-full py-4 text-lg">
+               الذهاب لتسجيل الدخول
+             </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[calc(100vh-64px)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-slate-50 dark:bg-gray-900 transition-colors">

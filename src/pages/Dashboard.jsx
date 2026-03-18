@@ -9,6 +9,7 @@ import { Send, Loader2, Bot, Menu, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function Dashboard() {
+  const [showConfirmMessage, setShowConfirmMessage] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,6 +21,19 @@ export default function Dashboard() {
   const messagesEndRef = useRef(null);
   const isInitialLoad = useRef(true);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Check if user just confirmed email (Supabase redirects with type=signup in hash)
+    if (window.location.hash.includes('type=signup') || window.location.hash.includes('type=recovery')) {
+      setShowConfirmMessage(true);
+      // Remove hash from URL
+      window.history.replaceState(null, null, window.location.pathname);
+      
+      // Hide message after 8 seconds
+      const timer = setTimeout(() => setShowConfirmMessage(false), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -305,6 +319,20 @@ export default function Dashboard() {
               <Menu size={20} />
            </Button>
         </div>
+
+        {showConfirmMessage && (
+            <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white p-4 m-4 rounded-2xl shadow-lg animate-bounce flex items-center justify-between z-50">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-2 rounded-full">
+                  <Sparkles size={20} />
+                </div>
+                <p className="font-bold">تم تأكيد بريدك الإلكتروني بنجاح! أهلاً بك في مساعدك الذكي.</p>
+              </div>
+              <button onClick={() => setShowConfirmMessage(false)} className="text-white/70 hover:text-white">
+                <Menu size={20} />
+              </button>
+            </div>
+        )}
 
         {apiError && (
             <div className="bg-red-50 border-r-4 border-red-500 text-red-700 p-4 m-4 rounded-xl animate-slide-up" role="alert">

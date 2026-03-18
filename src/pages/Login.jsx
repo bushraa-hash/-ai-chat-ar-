@@ -20,8 +20,13 @@ export default function Login() {
       setLoading(true);
       await login(email, password);
       navigate('/');
-    } catch {
-      setError('فشل تسجيل الدخول. تأكد من البريد الإلكتروني وكلمة المرور.');
+    } catch (err) {
+      console.error(err);
+      if (err.message && err.message.includes('Email not confirmed')) {
+        setError('يرجى تأكيد بريدك الإلكتروني أولاً. تحقق من صندوق الوارد (أو البريد غير المرغوب فيه).');
+      } else {
+        setError('فشل تسجيل الدخول. تأكد من البريد الإلكتروني وكلمة مورور صحيحة.');
+      }
     } finally {
       setLoading(false);
     }

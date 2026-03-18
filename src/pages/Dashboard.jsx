@@ -178,7 +178,8 @@ export default function Dashboard() {
       }));
 
       // 4. Get AI Response with Multi-Model Fallback
-      const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
+      // Support for most stable models first to avoid quota issues
+      const modelsToTry = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"];
       let aiText = "";
       let success = false;
       let lastErrorMessage = "";
@@ -235,7 +236,8 @@ export default function Dashboard() {
       }
 
       // 6. Background Activity: Extract and Save New Memories (Facts about user)
-      if (success) extractAndSaveMemory(userMessageText, aiText);
+      // optimization: only run on certain messages to save quota
+      if (success && messages.length % 4 === 0) extractAndSaveMemory(userMessageText, aiText);
       
     } catch (error) {
       console.error('Chat error:', error);
@@ -251,7 +253,7 @@ export default function Dashboard() {
       const prompt = `المستخدم قال: "${userText}"\nالمساعد رد: "${aiText}"`;
       const systemInstruction = "أنت خبير في استخراج الحقائق والاهتمامات عن المستخدمين. استخرج أي حقيقة جديدة هامة ذكرها المستخدم في الرسالة التالية (مثل اسمه، عمله، تفضيلاته، مدينته). إذا لم توجد حقيقة هامة جديدة، أجب بكلمة 'NONE'. إذا وجدت أكثر من حقيقة، افصل بينهم بفاصلة.";
       
-      const mNames = ["gemini-2.5-flash", "gemini-flash-latest"];
+      const mNames = ["gemini-1.5-flash"];
       let fact = "";
 
       for (const mName of mNames) {

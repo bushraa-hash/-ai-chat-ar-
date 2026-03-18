@@ -12,6 +12,7 @@ export default function Dashboard() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [apiError, setApiError] = useState('');
   const { user } = useAuth();
@@ -27,19 +28,22 @@ export default function Dashboard() {
         navigate('/login');
         return;
     }
-    fetchMessages();
   }, [user]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  const fetchMessages = async () => {
+  const fetchMessages = async (sessionId) => {
+    if (!sessionId) {
+      setMessages([]);
+      return;
+    }
     try {
       const { data, error } = await supabase
         .from('chats')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('session_id', sessionId)
         .order('created_at', { ascending: true });
 
       if (error) {
@@ -60,6 +64,9 @@ export default function Dashboard() {
     e.preventDefault();
     if (!input.trim() || !user) return;
 
+    let sessionId = currentSessionId;
+    const isNewSession = !sessionId;
+
     const userMessageText = input;
     const userMessage = { role: 'user', content: userMessageText };
     setInput('');
@@ -68,13 +75,29 @@ export default function Dashboard() {
     setApiError('');
 
     try {
-      // 1. Prepare history for Gemini
+      // 1. Create session if it doesn't exist
+      if (isNewSession) {
+        const { data: sessionData, error: sessionErr } = await supabase
+          .from('sessions')
+          .insert([{ 
+            user_id: user.id, 
+            title: userMessageText.substring(0, 30) + (userMessageText.length > 30 ? '...' : '') 
+          }])
+          .select()
+          .single();
+        
+        if (sessionErr) throw sessionErr;
+        sessionId = sessionData.id;
+        setCurrentSessionId(sessionId);
+      }
+
+      // 2. Prepare history for Gemini
       const history = messages.map(msg => ({
         role: msg.role === 'user' ? 'user' : 'model',
         parts: [{ text: msg.content }]
       }));
 
-      // 2. Get AI Response with Context (Memory)
+      // 3. Get AI Response with Context (Memory)
       const model = getGeminiModel();
       const chat = model.startChat({ history });
       const result = await chat.sendMessage(userMessageText);
@@ -84,14 +107,14 @@ export default function Dashboard() {
 
       setMessages(prev => [...prev, aiMessage]);
 
-      // 3. Save to Supabase (Best effort)
+      // 4. Save messages to Supabase linked to session
       try {
            await supabase.from('chats').insert([
-               { user_id: user.id, role: 'user', content: userMessageText },
-               { user_id: user.id, role: 'ai', content: aiText }
+               { user_id: user.id, session_id: sessionId, role: 'user', content: userMessageText },
+               { user_id: user.id, session_id: sessionId, role: 'ai', content: aiText }
            ]);
       } catch (dbErr) {
-           console.warn("Could not save to db (perhaps table not created):", dbErr);
+           console.warn("Could not save to db (perhaps table not created or schema not updated):", dbErr);
       }
       
     } catch (error) {
@@ -104,8 +127,14 @@ export default function Dashboard() {
   };
 
   const handleNewChat = () => {
+    setCurrentSessionId(null);
     setMessages([]);
     setApiError('');
+  };
+
+  const handleSelectChat = (sessionId) => {
+    setCurrentSessionId(sessionId);
+    fetchMessages(sessionId);
   };
 
   return (
@@ -114,8 +143,8 @@ export default function Dashboard() {
       {/* Sidebar */}
       <Sidebar 
         onNewChat={handleNewChat} 
-        chats={[]} // For now we use a single chat stream, can be expanded to multi-chat sessions
-        currentChatId={null}
+        currentChatId={currentSessionId}
+        onSelectChat={handleSelectChat}
       />
 
       {/* Main Content */}

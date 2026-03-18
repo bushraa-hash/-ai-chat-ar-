@@ -3,13 +3,10 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 let genAI = null;
 
 export const initGemini = (apiKey) => {
-  if (apiKey) {
-    genAI = new GoogleGenerativeAI(apiKey);
-  } else {
-    const envKey = import.meta.env.VITE_GOOGLE_API_KEY;
-    if (envKey && envKey !== 'YOUR_GOOGLE_API_KEY_HERE') {
-       genAI = new GoogleGenerativeAI(envKey);
-    }
+  const finalKey = apiKey?.trim() || import.meta.env.VITE_GOOGLE_API_KEY?.trim();
+  
+  if (finalKey && finalKey !== 'YOUR_GOOGLE_API_KEY_HERE') {
+    genAI = new GoogleGenerativeAI(finalKey);
   }
 };
 

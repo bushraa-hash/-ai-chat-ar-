@@ -19,12 +19,13 @@ const PrivateRoute = ({ children }) => {
 };
 
 function AppRoutes() {
+  const { user } = useAuth();
+  
   return (
     <div className="min-h-screen font-sans bg-slate-50 dark:bg-gray-900 transition-colors duration-300">
-      <Navbar />
       <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        <Route path="/login" element={<><Navbar /><Login /></>} />
+        <Route path="/register" element={<><Navbar /><Register /></>} />
         
         {/* Protected Routes */}
         <Route 
@@ -36,13 +37,20 @@ function AppRoutes() {
             } 
         />
         <Route 
+            path="/dashboard" 
+            element={<Navigate to="/" replace />} 
+        />
+        <Route 
             path="/settings" 
             element={
                 <PrivateRoute>
-                    <Settings />
+                    <><Navbar /><Settings /></>
                 </PrivateRoute>
             } 
         />
+        
+        {/* Catch-all */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>
   );

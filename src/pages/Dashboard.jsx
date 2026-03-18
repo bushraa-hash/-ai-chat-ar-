@@ -144,12 +144,15 @@ export default function Dashboard() {
       }));
 
       // 4. Get AI Response with Multi-Model Fallback
-      const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-pro"];
+      const modelsToTry = ["models/gemini-1.5-flash", "gemini-1.5-flash", "models/gemini-pro"];
       let aiText = "";
       let success = false;
+      let lastErrorMessage = "";
 
       for (const mName of modelsToTry) {
         try {
+          // Some environments require 'models/' prefix, others don't. SDK handles it, 
+          // but we try both if needed or stick to standard.
           const model = getGeminiModel(mName, systemPrompt);
           const chat = model.startChat({ history });
           const result = await chat.sendMessage(userMessageText);
@@ -160,9 +163,13 @@ export default function Dashboard() {
             break;
           }
         } catch (mErr) {
-          console.warn(`Model ${mName} failed, trying next...`, mErr.message);
-          if (mName === modelsToTry[modelsToTry.length - 1]) throw mErr;
+          lastErrorMessage = mErr.message;
+          console.warn(`Model ${mName} failed:`, mErr.message);
         }
+      }
+
+      if (!success) {
+          throw new Error(`تعذر الاتصال بالذكاء الاصطناعي: ${lastErrorMessage}`);
       }
 
       const aiMessage = { role: 'ai', content: aiText };

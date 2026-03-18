@@ -131,6 +131,8 @@ export default function Dashboard() {
       setMessages(prev => [...prev, userMessage]);
       setLoading(true);
 
+      console.log("DEBUG: Attempting to save chat for user:", user?.id);
+
       // Ensure we have a session
       let sessionId = currentSessionId;
       if (!sessionId) {

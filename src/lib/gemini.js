@@ -13,7 +13,7 @@ export const initGemini = (apiKey) => {
   }
 };
 
-export const getGeminiModel = (systemInstruction) => {
+export const getGeminiModel = (modelName = "gemini-1.5-flash", systemInstruction = "") => {
     if(!genAI) {
         initGemini();
     }
@@ -21,16 +21,8 @@ export const getGeminiModel = (systemInstruction) => {
         throw new Error("عذراً، يجب إعداد مفتاح Google API في الإعدادات أولاً.");
     }
     
-    // Attempt with current best model (1.5 Flash)
-    try {
-        return genAI.getGenerativeModel({ 
-            model: "gemini-1.5-flash",
-            systemInstruction: systemInstruction 
-        });
-    } catch (e) {
-        console.warn("Retrying with legacy model name...");
-        return genAI.getGenerativeModel({ 
-            model: "gemini-pro"
-        });
-    }
+    return genAI.getGenerativeModel({ 
+        model: modelName,
+        systemInstruction: systemInstruction 
+    });
 }

@@ -143,14 +143,29 @@ export default function Dashboard() {
         parts: [{ text: msg.content }]
       }));
 
-      // 4. Get AI Response with Context (Memory)
-      const model = getGeminiModel(systemPrompt);
-      const chat = model.startChat({ history });
-      const result = await chat.sendMessage(userMessageText);
-      const response = await result.response;
-      const aiText = response.text();
-      const aiMessage = { role: 'ai', content: aiText };
+      // 4. Get AI Response with Multi-Model Fallback
+      const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-pro"];
+      let aiText = "";
+      let success = false;
 
+      for (const mName of modelsToTry) {
+        try {
+          const model = getGeminiModel(mName, systemPrompt);
+          const chat = model.startChat({ history });
+          const result = await chat.sendMessage(userMessageText);
+          const response = await result.response;
+          aiText = response.text();
+          if (aiText) {
+            success = true;
+            break;
+          }
+        } catch (mErr) {
+          console.warn(`Model ${mName} failed, trying next...`, mErr.message);
+          if (mName === modelsToTry[modelsToTry.length - 1]) throw mErr;
+        }
+      }
+
+      const aiMessage = { role: 'ai', content: aiText };
       setMessages(prev => [...prev, aiMessage]);
 
       // 5. Save messages to Supabase
@@ -164,7 +179,7 @@ export default function Dashboard() {
       }
 
       // 6. Background Activity: Extract and Save New Memories (Facts about user)
-      extractAndSaveMemory(userMessageText, aiText);
+      if (success) extractAndSaveMemory(userMessageText, aiText);
       
     } catch (error) {
       console.error('Chat error:', error);
@@ -177,9 +192,22 @@ export default function Dashboard() {
 
   const extractAndSaveMemory = async (userText, aiText) => {
     try {
-      const model = getGeminiModel("أنت خبير في استخراج الحقائق والاهتمامات عن المستخدمين. استخرج أي حقيقة جديدة هامة ذكرها المستخدم في الرسالة التالية (مثل اسمه، عمله، تفضيلاته، مدينته). إذا لم توجد حقيقة هامة جديدة، أجب بكلمة 'NONE'. إذا وجدت أكثر من حقيقة، افصل بينهم بفاصلة.");
-      const result = await model.generateContent(`المستخدم قال: "${userText}"\nالمساعد رد: "${aiText}"`);
-      const fact = (await result.response).text().trim();
+      const prompt = `المستخدم قال: "${userText}"\nالمساعد رد: "${aiText}"`;
+      const systemInstruction = "أنت خبير في استخراج الحقائق والاهتمامات عن المستخدمين. استخرج أي حقيقة جديدة هامة ذكرها المستخدم في الرسالة التالية (مثل اسمه، عمله، تفضيلاته، مدينته). إذا لم توجد حقيقة هامة جديدة، أجب بكلمة 'NONE'. إذا وجدت أكثر من حقيقة، افصل بينهم بفاصلة.";
+      
+      const mNames = ["gemini-1.5-flash", "gemini-pro"];
+      let fact = "";
+
+      for (const mName of mNames) {
+        try {
+          const model = getGeminiModel(mName, systemInstruction);
+          const result = await model.generateContent(prompt);
+          fact = (await result.response).text().trim();
+          if (fact) break;
+        } catch (err) {
+          console.warn(`Memory extraction model ${mName} failed`);
+        }
+      }
       
       if (fact && fact !== 'NONE' && !memories.some(m => fact.includes(m))) {
         await supabase.from('user_memories').insert([{ user_id: user.id, fact }]);

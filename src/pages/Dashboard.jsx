@@ -13,7 +13,7 @@ export default function Dashboard() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
   const [apiError, setApiError] = useState('');
   const [memories, setMemories] = useState([]);
   const { user } = useAuth();
@@ -272,14 +272,25 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-64px)] bg-slate-50 dark:bg-gray-900 transition-colors overflow-hidden">
+    <div className="flex h-[calc(100vh-64px)] bg-slate-50 dark:bg-gray-900 transition-colors overflow-hidden relative">
       
+      {/* Backdrop for mobile */}
+      {isSidebarOpen && (
+        <div 
+          className="md:hidden fixed inset-0 bg-black/50 z-40 backdrop-blur-sm transition-opacity"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <Sidebar 
         onNewChat={handleNewChat} 
         currentChatId={currentSessionId}
         onSelectChat={handleSelectChat}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
       />
+
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 relative">

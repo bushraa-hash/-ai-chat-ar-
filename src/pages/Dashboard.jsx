@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 
 export default function Dashboard() {
   const [messages, setMessages] = useState([]);
+  const [sessions, setSessions] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState(null);
@@ -24,13 +25,20 @@ export default function Dashboard() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  useEffect(() => {
-    if(!user) {
-        navigate('/login');
-        return;
+  const fetchMemories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('user_memories')
+        .select('fact')
+        .eq('user_id', user.id);
+      
+      if (!error && data) {
+         setMemories(data.map(m => m.fact));
+      }
+    } catch (err) {
+      console.warn("Could not fetch memories:", err);
     }
-    fetchMemories();
-  }, [user]);
+  };
 
   const fetchSessions = async () => {
     try {
@@ -48,7 +56,6 @@ export default function Dashboard() {
         setCurrentSessionId(data[0].id);
         fetchMessages(data[0].id);
       }
-      // If NO sessions exist at all, we'll wait for the first message or create one
     } catch (err) {
       console.error('Error fetching sessions:', err);
     }
@@ -60,7 +67,7 @@ export default function Dashboard() {
         return;
     }
     fetchMemories();
-    fetchSessions(); // Added fetchSessions
+    fetchSessions();
     checkForLegacyChats();
   }, [user]);
 
@@ -116,7 +123,7 @@ export default function Dashboard() {
     try {
       const userMessageText = input.trim();
       setInput('');
-      setError(''); // Clear previous errors
+      setApiError(''); // Use setApiError consistent with state
 
       const userMessage = { role: 'user', content: userMessageText };
       setMessages(prev => [...prev, userMessage]);

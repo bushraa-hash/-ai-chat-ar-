@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AuthProvider } from './contexts/AuthContext';
+import { useAuth } from './hooks/useAuth';
 import { Navbar } from './components/layout/Navbar';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
@@ -19,8 +20,6 @@ const PrivateRoute = ({ children }) => {
 };
 
 function AppRoutes() {
-  const { user } = useAuth();
-  
   return (
     <div className="min-h-screen font-sans bg-slate-50 dark:bg-gray-900 transition-colors duration-300">
       <Routes>

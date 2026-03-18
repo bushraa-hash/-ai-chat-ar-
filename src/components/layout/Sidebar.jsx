@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
 import { 
   MessageSquare, 
@@ -18,13 +18,8 @@ export function Sidebar({ onNewChat, currentChatId, onSelectChat }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user) {
-      fetchSessions();
-    }
-  }, [user, currentChatId]);
-
-  const fetchSessions = async () => {
+  const fetchSessions = useCallback(async () => {
+    if (!user) return;
     try {
       const { data, error } = await supabase
         .from('sessions')
@@ -42,7 +37,11 @@ export function Sidebar({ onNewChat, currentChatId, onSelectChat }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions, currentChatId]);
 
   return (
     <aside className="hidden md:flex flex-col w-72 h-full glass border-l border-gray-200 dark:border-gray-800 transition-all duration-300">

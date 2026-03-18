@@ -37,8 +37,8 @@ export const ChatMessage = ({ message, isAI }) => {
               <ReactMarkdown 
                 remarkPlugins={[remarkGfm]}
                 components={{
-                  pre: ({node, ...props}) => <pre className="bg-gray-900 text-gray-100 p-4 rounded-xl overflow-x-auto my-3 scrollbar-thin" {...props} />,
-                  code: ({node, inline, ...props}) => 
+                  pre: ({ ...props }) => <pre className="bg-gray-900 text-gray-100 p-4 rounded-xl overflow-x-auto my-3 scrollbar-thin" {...props} />,
+                  code: ({ inline, ...props }) => 
                     inline 
                       ? <code className="bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded-md font-mono text-sm" {...props} /> 
                       : <code className="font-mono text-sm" {...props} />

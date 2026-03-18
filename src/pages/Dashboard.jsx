@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { getGeminiModel } from '../lib/gemini';
 import { Button } from '../components/ui/Button';
@@ -10,7 +10,6 @@ import { useNavigate } from 'react-router-dom';
 
 export default function Dashboard() {
   const [messages, setMessages] = useState([]);
-  const [sessions, setSessions] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState(null);
@@ -25,7 +24,8 @@ export default function Dashboard() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const fetchMemories = async () => {
+  const fetchMemories = useCallback(async () => {
+    if (!user) return;
     try {
       const { data, error } = await supabase
         .from('user_memories')
@@ -35,12 +35,13 @@ export default function Dashboard() {
       if (!error && data) {
          setMemories(data.map(m => m.fact));
       }
-    } catch (err) {
-      console.warn("Could not fetch memories:", err);
+    } catch {
+      console.warn("Could not fetch memories");
     }
-  };
+  }, [user]);
 
-  const fetchSessions = async () => {
+  const fetchSessions = useCallback(async () => {
+    if (!user) return;
     try {
       const { data, error } = await supabase
         .from('sessions')
@@ -49,17 +50,16 @@ export default function Dashboard() {
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      setSessions(data || []);
       
       // If we have sessions but none are current, pick the first one
       if (data && data.length > 0 && !currentSessionId) {
         setCurrentSessionId(data[0].id);
         fetchMessages(data[0].id);
       }
-    } catch (err) {
-      console.error('Error fetching sessions:', err);
+    } catch {
+      console.error('Error fetching sessions');
     }
-  };
+  }, [user, currentSessionId]);
 
   useEffect(() => {
     if(!user) {
@@ -69,9 +69,10 @@ export default function Dashboard() {
     fetchMemories();
     fetchSessions();
     checkForLegacyChats();
-  }, [user]);
+  }, [user, navigate, fetchMemories, fetchSessions, checkForLegacyChats]);
 
-  const checkForLegacyChats = async () => {
+  const checkForLegacyChats = useCallback(async () => {
+    if (!user) return;
     // Check if there are chats with no session_id
     const { data, error } = await supabase
       .from('chats')
@@ -82,9 +83,8 @@ export default function Dashboard() {
     
     if (!error && data && data.length > 0) {
        console.log("Legacy chats found. Requesting user to migrate.");
-       // We can trigger a migration later or just show a button.
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     scrollToBottom();
@@ -140,12 +140,11 @@ export default function Dashboard() {
           .single();
         
         if (sErr) {
-            console.error("Session creation failed:", sErr);
-            throw new Error(`فشل إنشاء الجلسة: ${sErr.message}. تأكد من تشغيل أكواد SQL المطلوبة.`);
+            console.error("Session creation failed");
+            throw new Error(`فشل إنشاء الجلسة. تأكد من تشغيل أكواد SQL المطلوبة.`);
         }
         sessionId = newSession.id;
         setCurrentSessionId(sessionId);
-        setSessions(prev => [newSession, ...prev]); // Add new session to the list
       }
 
       // 2. Prepare System Instruction (Long-Term Memory)
@@ -204,10 +203,10 @@ export default function Dashboard() {
       // 6. Background Activity: Extract and Save New Memories (Facts about user)
       if (success) extractAndSaveMemory(userMessageText, aiText);
       
-    } catch (error) {
-      console.error('Chat error:', error);
+    } catch {
+      console.error('Chat error');
       setMessages(prev => prev.slice(0, -1)); 
-      setApiError(error.message || 'حدث خطأ غير متوقع أثناء التواصل مع الذكاء الاصطناعي.');
+      setApiError('حدث خطأ غير متوقع أثناء التواصل مع الذكاء الاصطناعي.');
     } finally {
       setLoading(false);
     }
@@ -227,8 +226,8 @@ export default function Dashboard() {
           const result = await model.generateContent(prompt);
           fact = (await result.response).text().trim();
           if (fact) break;
-        } catch (err) {
-          console.warn(`Memory extraction model ${mName} failed`);
+        } catch {
+          console.warn(`Memory extraction model failed`);
         }
       }
       
@@ -236,8 +235,8 @@ export default function Dashboard() {
         await supabase.from('user_memories').insert([{ user_id: user.id, fact }]);
         setMemories(prev => [...prev, fact]);
       }
-    } catch (err) {
-      console.warn("Memory extraction failed:", err);
+    } catch {
+      console.warn("Memory extraction failed");
     }
   };
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { initGemini } from '../lib/gemini';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 
 export default function Settings() {
   const { user } = useAuth();
-  const [apiKey, setApiKey] = useState('');
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('google_api_key') || '');
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
 
@@ -16,10 +16,7 @@ export default function Settings() {
     if(!user) {
         navigate('/login');
     }
-    // Attempt to load from local storage if previously saved
-    const savedKey = localStorage.getItem('google_api_key');
-    if (savedKey) setApiKey(savedKey);
-  }, [user]);
+  }, [user, navigate]);
 
   const handleSave = (e) => {
     e.preventDefault();

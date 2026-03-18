@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Bot } from 'lucide-react';
@@ -30,7 +30,7 @@ export default function Register() {
       await register(email, password, name);
       setMessage('نجاح! تحقق من بريدك الإلكتروني لتفعيل الحساب.');
       setTimeout(() => navigate('/login'), 3000);
-    } catch (err) {
+    } catch {
       setError('فشل إنشاء الحساب. تأكد من صحة البيانات أو حاول ببريد آخر.');
     } finally {
       setLoading(false);

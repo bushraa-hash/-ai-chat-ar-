@@ -10,7 +10,7 @@ export const initGemini = (apiKey) => {
   }
 };
 
-export const getGeminiModel = (modelName = "gemini-1.5-flash", systemInstruction = "") => {
+export const getGeminiModel = (modelName = "gemini-2.5-flash", systemInstruction = "") => {
     if(!genAI) {
         initGemini();
     }
@@ -18,8 +18,10 @@ export const getGeminiModel = (modelName = "gemini-1.5-flash", systemInstruction
         throw new Error("عذراً، يجب إعداد مفتاح Google API في الإعدادات أولاً.");
     }
     
-    return genAI.getGenerativeModel({ 
-        model: modelName,
-        systemInstruction: systemInstruction 
-    });
+    const config = { model: modelName };
+    if (systemInstruction && systemInstruction.trim()) {
+        config.systemInstruction = systemInstruction;
+    }
+    
+    return genAI.getGenerativeModel(config);
 }

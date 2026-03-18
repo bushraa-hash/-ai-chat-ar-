@@ -159,27 +159,35 @@ export default function Dashboard() {
       }));
 
       // 4. Get AI Response with Multi-Model Fallback
-      const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-pro"];
+      const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
       let aiText = "";
       let success = false;
       let lastErrorMessage = "";
 
       for (const mName of modelsToTry) {
         try {
-          // Some environments require 'models/' prefix, others don't. SDK handles it, 
-          // but we try both if needed or stick to standard.
+          console.log(`Trying model: ${mName}`);
           const model = getGeminiModel(mName, systemPrompt);
-          const chat = model.startChat({ history });
-          const result = await chat.sendMessage(userMessageText);
+          
+          // Use generateContent instead of startChat for broader compatibility
+          // Combine history and current message into a single prompt for generateContent if needed,
+          // or just pass history as contents.
+          const contents = [
+            ...history,
+            { role: 'user', parts: [{ text: userMessageText }] }
+          ];
+
+          const result = await model.generateContent({ contents });
           const response = await result.response;
           aiText = response.text();
+          
           if (aiText) {
             success = true;
             break;
           }
         } catch (mErr) {
           lastErrorMessage = mErr.message;
-          console.warn(`Model ${mName} failed:`, mErr.message);
+          console.error(`Model ${mName} failed:`, mErr);
         }
       }
 
@@ -217,7 +225,7 @@ export default function Dashboard() {
       const prompt = `المستخدم قال: "${userText}"\nالمساعد رد: "${aiText}"`;
       const systemInstruction = "أنت خبير في استخراج الحقائق والاهتمامات عن المستخدمين. استخرج أي حقيقة جديدة هامة ذكرها المستخدم في الرسالة التالية (مثل اسمه، عمله، تفضيلاته، مدينته). إذا لم توجد حقيقة هامة جديدة، أجب بكلمة 'NONE'. إذا وجدت أكثر من حقيقة، افصل بينهم بفاصلة.";
       
-      const mNames = ["gemini-1.5-flash", "gemini-1.5-pro"];
+      const mNames = ["gemini-2.5-flash", "gemini-flash-latest"];
       let fact = "";
 
       for (const mName of mNames) {

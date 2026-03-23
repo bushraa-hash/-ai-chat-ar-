@@ -6,16 +6,16 @@ import { Navbar } from './components/layout/Navbar';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ResetPassword from './pages/ResetPassword';
 import Settings from './pages/Settings';
 
-// A generic wrapper for pages requiring auth
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
-  
+
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-gray-900">جاري التحميل...</div>;
   }
-  
+
   return user ? children : <Navigate to="/login" />;
 };
 
@@ -25,30 +25,26 @@ function AppRoutes() {
       <Routes>
         <Route path="/login" element={<><Navbar /><Login /></>} />
         <Route path="/register" element={<><Navbar /><Register /></>} />
-        
-        {/* Protected Routes */}
-        <Route 
-            path="/" 
-            element={
-                <PrivateRoute>
-                    <Dashboard />
-                </PrivateRoute>
-            } 
+        <Route path="/reset-password" element={<><Navbar /><ResetPassword /></>} />
+
+        <Route
+          path="/"
+          element={(
+            <PrivateRoute>
+              <Dashboard />
+            </PrivateRoute>
+          )}
         />
-        <Route 
-            path="/dashboard" 
-            element={<Navigate to="/" replace />} 
+        <Route path="/dashboard" element={<Navigate to="/" replace />} />
+        <Route
+          path="/settings"
+          element={(
+            <PrivateRoute>
+              <><Navbar /><Settings /></>
+            </PrivateRoute>
+          )}
         />
-        <Route 
-            path="/settings" 
-            element={
-                <PrivateRoute>
-                    <><Navbar /><Settings /></>
-                </PrivateRoute>
-            } 
-        />
-        
-        {/* Catch-all */}
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>

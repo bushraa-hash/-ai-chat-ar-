@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { getGeminiModel } from '../lib/gemini';
+import { callChatApi } from '../lib/chatApi';
 import { Button } from '../components/ui/Button';
 import { ChatMessage } from '../components/chat/ChatMessage';
 import { Sidebar } from '../components/layout/Sidebar';
@@ -23,20 +23,17 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if user just confirmed email (Supabase redirects with type=signup in hash)
     if (window.location.hash.includes('type=signup') || window.location.hash.includes('type=recovery')) {
       setShowConfirmMessage(true);
-      // Remove hash from URL
-      window.history.replaceState(null, null, window.location.pathname);
-      
-      // Hide message after 8 seconds
+      window.history.replaceState(null, '', window.location.pathname);
+
       const timer = setTimeout(() => setShowConfirmMessage(false), 8000);
       return () => clearTimeout(timer);
     }
   }, []);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const fetchMemories = useCallback(async () => {
@@ -46,60 +43,42 @@ export default function Dashboard() {
         .from('user_memories')
         .select('fact')
         .eq('user_id', user.id);
-      
+
       if (!error && data) {
-         setMemories(data.map(m => m.fact));
+        setMemories(data.map((memory) => memory.fact));
       }
     } catch {
-      console.warn("Could not fetch memories");
+      console.warn('Could not fetch memories');
     }
   }, [user]);
 
-  const fetchSessions = useCallback(async () => {
-    if (!user) return;
-    try {
-      const { data, error } = await supabase
-        .from('sessions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      
-      // We no longer auto-select the first session on initial load. 
-      // The user wants to start with a fresh 'New Chat' screen.
-      if (isInitialLoad.current) {
-          isInitialLoad.current = false;
-      }
-    } catch {
-      console.error('Error fetching sessions');
-    }
-  }, [user, currentSessionId]);
-
   const checkForLegacyChats = useCallback(async () => {
     if (!user) return;
-    // Check if there are chats with no session_id
+
     const { data, error } = await supabase
       .from('chats')
       .select('id')
       .is('session_id', null)
       .eq('user_id', user.id)
       .limit(1);
-    
+
     if (!error && data && data.length > 0) {
-       console.log("Legacy chats found. Requesting user to migrate.");
+      console.log('Legacy chats found. Requesting user to migrate.');
     }
   }, [user]);
 
   useEffect(() => {
-    if(!user) {
-        navigate('/login');
-        return;
+    if (!user) {
+      navigate('/login');
+      return;
     }
+
     fetchMemories();
-    fetchSessions();
+    if (isInitialLoad.current) {
+      isInitialLoad.current = false;
+    }
     checkForLegacyChats();
-  }, [user, navigate, fetchMemories, fetchSessions, checkForLegacyChats]);
+  }, [user, navigate, fetchMemories, checkForLegacyChats]);
 
   useEffect(() => {
     scrollToBottom();
@@ -110,7 +89,7 @@ export default function Dashboard() {
       setMessages([]);
       return;
     }
-    // Clear messages before fetching so it doesn't show previous chat while loading or if it fails
+
     setMessages([]);
     try {
       const { data, error } = await supabase
@@ -120,11 +99,11 @@ export default function Dashboard() {
         .order('created_at', { ascending: true });
 
       if (error) {
-           console.error("Supabase error viewing chats:", error);
-           setApiError(`خطأ في قاعدة البيانات: ${error.message} - تأكد من صلاحيات الجداول.`);
-           return;
+        console.error('Supabase error viewing chats:', error);
+        setApiError(`خطأ في قاعدة البيانات: ${error.message} - تأكد من صلاحيات الجداول.`);
+        return;
       }
-      
+
       if (data) {
         setMessages(data);
       }
@@ -140,108 +119,68 @@ export default function Dashboard() {
     try {
       const userMessageText = input.trim();
       setInput('');
-      setApiError(''); // Use setApiError consistent with state
+      setApiError('');
 
       const userMessage = { role: 'user', content: userMessageText };
-      setMessages(prev => [...prev, userMessage]);
+      setMessages((prev) => [...prev, userMessage]);
       setLoading(true);
 
-      console.log("DEBUG: Attempting to save chat for user:", user?.id);
-
-      // Ensure we have a session
       let sessionId = currentSessionId;
       if (!sessionId) {
-        console.log("No current session, creating one...");
-        const { data: newSession, error: sErr } = await supabase
+        const { data: newSession, error: sessionError } = await supabase
           .from('sessions')
-          .insert([{ user_id: user.id, title: userMessageText.substring(0, 30) || "محادثة جديدة" }])
+          .insert([{ user_id: user.id, title: userMessageText.substring(0, 30) || 'محادثة جديدة' }])
           .select()
           .single();
-        
-        if (sErr) {
-            console.error("Session creation failed");
-            throw new Error(`فشل إنشاء الجلسة. تأكد من تشغيل أكواد SQL المطلوبة.`);
+
+        if (sessionError) {
+          console.error('Session creation failed', sessionError);
+          throw new Error('فشل إنشاء الجلسة. تأكد من تشغيل أكواد SQL المطلوبة.');
         }
+
         sessionId = newSession.id;
         setCurrentSessionId(sessionId);
       }
 
-      // 2. Prepare System Instruction (Long-Term Memory)
-      const systemPrompt = memories.length > 0 
-        ? `أنت مساعد ذكي يتذكر معلومات هامة عن المستخدم لتحسين تجربته. هذه حقائق تعرفها عنه بالفعل: \n- ${memories.join('\n- ')}\n\nتواصل معه بناءً على هذا السياق.`
-        : "أنت مساعد ذكي مفيد وودود جداً يتحدث باللغة العربية.";
+      const systemPrompt = memories.length > 0
+        ? `أنت مساعد ذكي يتذكر معلومات هامة عن المستخدم لتحسين تجربته. هذه حقائق تعرفها عنه بالفعل:\n- ${memories.join('\n- ')}\n\nتواصل معه بناءً على هذا السياق.`
+        : 'أنت مساعد ذكي مفيد وودود جدًا يتحدث باللغة العربية.';
 
-      // 3. Prepare history for Gemini
-      const history = messages.map(msg => ({
+      const history = messages.map((msg) => ({
         role: msg.role === 'user' ? 'user' : 'model',
         parts: [{ text: msg.content }]
       }));
 
-      // 4. Get AI Response with Multi-Model Fallback
-      // Using only the most stable and widely supported model names
-      const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro-latest"];
-      let aiText = "";
-      let success = false;
-      let lastErrorMessage = "";
-
-      for (const mName of modelsToTry) {
-        try {
-          console.log(`Trying model: ${mName}`);
-          const model = getGeminiModel(mName, systemPrompt);
-          
-          // Use generateContent instead of startChat for broader compatibility
-          // Combine history and current message into a single prompt for generateContent if needed,
-          // or just pass history as contents.
-          const contents = [
-            ...history,
-            { role: 'user', parts: [{ text: userMessageText }] }
-          ];
-
-          const result = await model.generateContent({ contents });
-          const response = await result.response;
-          aiText = response.text();
-          
-          if (aiText) {
-            success = true;
-            break;
-          }
-        } catch (mErr) {
-          lastErrorMessage = mErr.message;
-          console.error(`Model ${mName} failed:`, mErr);
-        }
-      }
-
-      if (!success) {
-          throw new Error(`تعذر الاتصال بالذكاء الاصطناعي: ${lastErrorMessage}`);
-      }
+      const { text: aiText } = await callChatApi({
+        mode: 'chat',
+        history,
+        message: userMessageText,
+        systemPrompt,
+      });
 
       const aiMessage = { role: 'ai', content: aiText };
-      setMessages(prev => [...prev, aiMessage]);
+      setMessages((prev) => [...prev, aiMessage]);
 
-      // 5. Save messages to Supabase
       try {
-           const { error: dbErr } = await supabase.from('chats').insert([
-               { user_id: user.id, session_id: sessionId, role: 'user', content: userMessageText },
-               { user_id: user.id, session_id: sessionId, role: 'ai', content: aiText }
-           ]);
-           if (dbErr) {
-               console.error("Insert error:", dbErr);
-               setApiError(`تنبيه: المحادثة تعمل ولكن لم يتم حفظها في قاعدة البيانات (${dbErr.message}). قد تحتاج إلى تفعيل RLS أو إنشاء جدول chats.`);
-           } else {
-               // Update Sidebar proactively if it's a new session, or let it sync
-               fetchSessions();
-           }
-      } catch (dbCatchErr) {
-           console.warn("Could not save to db:", dbCatchErr);
+        const { error: dbError } = await supabase.from('chats').insert([
+          { user_id: user.id, session_id: sessionId, role: 'user', content: userMessageText },
+          { user_id: user.id, session_id: sessionId, role: 'ai', content: aiText }
+        ]);
+
+        if (dbError) {
+          console.error('Insert error:', dbError);
+          setApiError(`تنبيه: المحادثة تعمل ولكن لم يتم حفظها في قاعدة البيانات (${dbError.message}). قد تحتاج إلى تفعيل RLS أو إنشاء جدول chats.`);
+        }
+      } catch (dbCatchError) {
+        console.warn('Could not save to db:', dbCatchError);
       }
 
-      // 6. Background Activity: Extract and Save New Memories (Facts about user)
-      // optimization: only run on certain messages to save quota
-      if (success && messages.length % 4 === 0) extractAndSaveMemory(userMessageText, aiText);
-      
+      if (messages.length > 0 && messages.length % 8 === 0) {
+        extractAndSaveMemory(userMessageText, aiText);
+      }
     } catch (error) {
       console.error('Chat error:', error);
-      setMessages(prev => prev.slice(0, -1)); 
+      setMessages((prev) => prev.slice(0, -1));
       setApiError(error.message || 'حدث خطأ غير متوقع أثناء التواصل مع الذكاء الاصطناعي.');
     } finally {
       setLoading(false);
@@ -251,28 +190,27 @@ export default function Dashboard() {
   const extractAndSaveMemory = async (userText, aiText) => {
     try {
       const prompt = `المستخدم قال: "${userText}"\nالمساعد رد: "${aiText}"`;
-      const systemInstruction = "أنت خبير في استخراج الحقائق والاهتمامات عن المستخدمين. استخرج أي حقيقة جديدة هامة ذكرها المستخدم في الرسالة التالية (مثل اسمه، عمله، تفضيلاته، مدينته). إذا لم توجد حقيقة هامة جديدة، أجب بكلمة 'NONE'. إذا وجدت أكثر من حقيقة، افصل بينهم بفاصلة.";
-      
-      const mNames = ["gemini-1.5-flash"];
-      let fact = "";
+      const systemInstruction = "أنت خبير في استخراج الحقائق والاهتمامات عن المستخدمين. استخرج أي حقيقة جديدة هامة ذكرها المستخدم في الرسالة التالية مثل اسمه أو عمله أو تفضيلاته أو مدينته. إذا لم توجد حقيقة جديدة هامة فأجب بكلمة NONE. وإذا وجدت أكثر من حقيقة فافصل بينها بفاصلة.";
 
-      for (const mName of mNames) {
-        try {
-          const model = getGeminiModel(mName, systemInstruction);
-          const result = await model.generateContent(prompt);
-          fact = (await result.response).text().trim();
-          if (fact) break;
-        } catch {
-          console.warn(`Memory extraction model failed`);
-        }
+      let fact = '';
+
+      try {
+        const result = await callChatApi({
+          mode: 'memory',
+          prompt,
+          systemPrompt: systemInstruction,
+        });
+        fact = result.text?.trim() || '';
+      } catch {
+        console.warn('Memory extraction model failed');
       }
-      
-      if (fact && fact !== 'NONE' && !memories.some(m => fact.includes(m))) {
+
+      if (fact && fact !== 'NONE' && !memories.some((memory) => fact.includes(memory))) {
         await supabase.from('user_memories').insert([{ user_id: user.id, fact }]);
-        setMemories(prev => [...prev, fact]);
+        setMemories((prev) => [...prev, fact]);
       }
     } catch {
-      console.warn("Memory extraction failed");
+      console.warn('Memory extraction failed');
     }
   };
 
@@ -289,97 +227,86 @@ export default function Dashboard() {
 
   return (
     <div className="flex h-[calc(100vh-64px)] bg-slate-50 dark:bg-gray-900 transition-colors overflow-hidden relative">
-      
-      {/* Backdrop for mobile */}
       {isSidebarOpen && (
-        <div 
+        <div
           className="md:hidden fixed inset-0 bg-black/50 z-40 backdrop-blur-sm transition-opacity"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
-      <Sidebar 
-        onNewChat={handleNewChat} 
+      <Sidebar
+        onNewChat={handleNewChat}
         currentChatId={currentSessionId}
         onSelectChat={handleSelectChat}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
 
-
-      {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 relative">
-        
-        {/* Mobile Header (Hidden on MD) */}
         <div className="md:hidden flex items-center justify-between p-4 glass border-b border-gray-100 dark:border-gray-800">
-           <div className="flex items-center gap-2 font-bold text-purple-600">
-              <Bot size={24} />
-              <span>مساعدي</span>
-           </div>
-           <Button variant="ghost" size="sm" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
-              <Menu size={20} />
-           </Button>
+          <div className="flex items-center gap-2 font-bold text-purple-600">
+            <Bot size={24} />
+            <span>مساعدي</span>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+            <Menu size={20} />
+          </Button>
         </div>
 
         {showConfirmMessage && (
-            <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white p-4 m-4 rounded-2xl shadow-lg animate-bounce flex items-center justify-between z-50">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-full">
-                  <Sparkles size={20} />
-                </div>
-                <p className="font-bold">تم تأكيد بريدك الإلكتروني بنجاح! أهلاً بك في مساعدك الذكي.</p>
+          <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white p-4 m-4 rounded-2xl shadow-lg animate-bounce flex items-center justify-between z-50">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-2 rounded-full">
+                <Sparkles size={20} />
               </div>
-              <button onClick={() => setShowConfirmMessage(false)} className="text-white/70 hover:text-white">
-                <Menu size={20} />
-              </button>
+              <p className="font-bold">تم تأكيد بريدك الإلكتروني بنجاح! أهلًا بك في مساعدك الذكي.</p>
             </div>
+            <button onClick={() => setShowConfirmMessage(false)} className="text-white/70 hover:text-white">
+              <Menu size={20} />
+            </button>
+          </div>
         )}
 
         {apiError && (
-            <div className="bg-red-50 border-r-4 border-red-500 text-red-700 p-4 m-4 rounded-xl animate-slide-up" role="alert">
-              <p className="text-sm font-medium">{apiError}</p>
-            </div>
+          <div className="bg-red-50 border-r-4 border-red-500 text-red-700 p-4 m-4 rounded-xl animate-slide-up" role="alert">
+            <p className="text-sm font-medium">{apiError}</p>
+          </div>
         )}
 
-        {/* Main Chat Area */}
         <main className="flex-1 flex flex-col overflow-hidden max-w-4xl mx-auto w-full px-4 md:px-6 relative">
-          
-          {/* Welcome Header */}
           {messages.length > 0 && (
-             <div className="pt-6 pb-2 border-b border-gray-100 dark:border-gray-800 mb-6 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-gray-500 text-sm">
-                   <Sparkles size={16} className="text-amber-500" />
-                   <span>محادثة ذكية</span>
-                </div>
-                <div className="text-xs text-gray-400">
-                   {messages.length} رسائل
-                </div>
-             </div>
+            <div className="pt-6 pb-2 border-b border-gray-100 dark:border-gray-800 mb-6 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-gray-500 text-sm">
+                <Sparkles size={16} className="text-amber-500" />
+                <span>محادثة ذكية</span>
+              </div>
+              <div className="text-xs text-gray-400">
+                {messages.length} رسائل
+              </div>
+            </div>
           )}
 
-          {/* Messages List */}
           <div className="flex-1 overflow-y-auto custom-scrollbar pt-4">
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center px-4 animate-slide-up">
                 <div className="w-20 h-20 bg-gradient-to-tr from-purple-100 to-indigo-100 dark:from-purple-900/30 dark:to-indigo-900/30 text-purple-600 dark:text-purple-400 rounded-3xl flex items-center justify-center mb-6 shadow-xl shadow-purple-200/50 dark:shadow-none rotate-3">
-                   <Bot size={40} />
+                  <Bot size={40} />
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">مرحباً بك في مساعدك الذكي!</h3>
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">مرحبًا بك في مساعدك الذكي!</h3>
                 <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto leading-relaxed">
-                   أنا هنا لمساعدتك في كل شيء، من كتابة الكود إلى الإجابة على استفساراتك اليومية. 
-                   <br/> <span className="text-purple-600 dark:text-purple-400 font-medium italic mt-2 block">لقد أصبحت الآن أتذكر سياق حديثنا!</span>
+                  أنا هنا لمساعدتك في كل شيء، من كتابة الكود إلى الإجابة على استفساراتك اليومية.
+                  <br /> <span className="text-purple-600 dark:text-purple-400 font-medium italic mt-2 block">أصبحت الآن أتذكر سياق حديثنا!</span>
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-10 w-full max-w-lg">
-                   {['كيف يمكنني تحسين كود React؟', 'اكتب لي قصيدة عن التقنية', 'اشرح لي مفهوم الـ API', 'ما هي أفضل الممارسات في الـ CSS؟'].map((suggest, i) => (
-                      <button 
-                        key={i}
-                        onClick={() => { setInput(suggest); }}
-                        className="p-3 text-sm text-right bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl hover:border-purple-300 dark:hover:border-purple-700 hover:shadow-md transition-all text-gray-600 dark:text-gray-400"
-                      >
-                        {suggest}
-                      </button>
-                   ))}
+                  {['كيف يمكنني تحسين كود React؟', 'اكتب لي قصيدة عن التقنية', 'اشرح لي مفهوم API', 'ما هي أفضل الممارسات في CSS؟'].map((suggest, index) => (
+                    <button
+                      key={index}
+                      onClick={() => { setInput(suggest); }}
+                      className="p-3 text-sm text-right bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl hover:border-purple-300 dark:hover:border-purple-700 hover:shadow-md transition-all text-gray-600 dark:text-gray-400"
+                    >
+                      {suggest}
+                    </button>
+                  ))}
                 </div>
               </div>
             ) : (
@@ -388,27 +315,26 @@ export default function Dashboard() {
                   <ChatMessage key={index} message={msg.content} isAI={msg.role === 'ai'} />
                 ))}
                 {loading && (
-                   <div className="flex w-full mb-8 justify-start animate-pulse">
-                   <div className="flex max-w-[80%] items-start gap-4 flex-row">
-                     <div className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center shadow-lg bg-gradient-to-br from-purple-500 to-indigo-600 text-white">
+                  <div className="flex w-full mb-8 justify-start animate-pulse">
+                    <div className="flex max-w-[80%] items-start gap-4 flex-row">
+                      <div className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center shadow-lg bg-gradient-to-br from-purple-500 to-indigo-600 text-white">
                         <Bot size={20} />
-                     </div>
-                     <div className="px-5 py-4 rounded-3xl shadow-sm bg-white border border-gray-100 text-gray-400 dark:bg-gray-800 dark:border-gray-700 rounded-tr-none flex items-center gap-3">
-                       <Loader2 className="w-4 h-4 animate-spin text-purple-600" /> 
-                       <span className="text-sm font-medium">يفكر الآن...</span>
-                     </div>
-                   </div>
-                 </div>
+                      </div>
+                      <div className="px-5 py-4 rounded-3xl shadow-sm bg-white border border-gray-100 text-gray-400 dark:bg-gray-800 dark:border-gray-700 rounded-tr-none flex items-center gap-3">
+                        <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
+                        <span className="text-sm font-medium">يفكر الآن...</span>
+                      </div>
+                    </div>
+                  </div>
                 )}
                 <div ref={messagesEndRef} />
               </div>
             )}
           </div>
 
-          {/* Input Area */}
           <div className="flex-none pt-4 pb-6 glass z-10 sticky bottom-0 -mx-4 px-4 sm:-mx-6 sm:px-6">
             <form onSubmit={handleSend} className="relative flex items-center w-full max-w-3xl mx-auto group">
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-3xl blur-md opacity-20 group-focus-within:opacity-40 transition-opacity"></div>
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-3xl blur-md opacity-20 group-focus-within:opacity-40 transition-opacity" />
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -416,9 +342,9 @@ export default function Dashboard() {
                 className="relative block w-full rounded-3xl border-0 py-4 px-6 pe-16 text-gray-900 shadow-xl ring-1 ring-inset ring-gray-200 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-purple-600 sm:text-base sm:leading-6 dark:bg-gray-900/90 dark:text-white dark:ring-gray-700 dark:placeholder-gray-500 resize-none h-14 overflow-hidden focus:h-auto max-h-40"
                 rows={1}
                 onKeyDown={(e) => {
-                  if(e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend(e);
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend(e);
                   }
                 }}
               />
@@ -435,10 +361,9 @@ export default function Dashboard() {
               </button>
             </form>
             <div className="text-center mt-3 text-xs text-gray-400 dark:text-gray-500">
-               مدعوم بـ <span className="font-semibold text-purple-500">Gemini AI</span> • يتذكر السياق تلقائياً
+              مدعوم بـ <span className="font-semibold text-purple-500">Gemini AI</span> • يتذكر السياق تلقائيًا
             </div>
           </div>
-
         </main>
       </div>
     </div>

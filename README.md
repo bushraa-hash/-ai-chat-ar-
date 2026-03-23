@@ -1,16 +1,72 @@
-# React + Vite
+# AI Chat AR
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+تطبيق دردشة عربي مبني بـ React و Vite و Supabase و Gemini، مع نشر مناسب على Vercel عبر دالة `api/chat`.
 
-Currently, two official plugins are available:
+## ما الذي تم إصلاحه
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- نقل استدعاء Gemini في بيئة الإنتاج من المتصفح إلى دالة Vercel داخل `api/chat.js`.
+- تحسين رسائل الخطأ عند تجاوز الحصة `429` بحيث تظهر للمستخدم رسالة عربية واضحة بدل الخطأ الخام الطويل.
+- تقليل استهلاك الحصة عبر تخفيف طلبات استخراج الذاكرة الخلفية.
+- إضافة صفحة فعلية لإعادة تعيين كلمة المرور.
+- إصلاح النصوص العربية المكسورة ومشاكل `lint` و`build`.
 
-## React Compiler
+## متغيرات البيئة
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+أنشئ ملف `.env` محليًا اعتمادًا على `.env.example`:
 
-## Expanding the ESLint configuration
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+GOOGLE_API_KEY=your-google-api-key
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+مهم:
+
+- في الواجهة الأمامية نحتاج `VITE_SUPABASE_URL` و `VITE_SUPABASE_ANON_KEY`.
+- مفتاح Gemini في النشر يجب أن يكون باسم `GOOGLE_API_KEY` وليس `VITE_GOOGLE_API_KEY`.
+- إذا كنت قد استخدمت مفتاح Gemini قديمًا داخل المتصفح أو رفعته سابقًا، من الأفضل تدويره `Rotate` من Google AI Studio وإنشاء مفتاح جديد.
+
+## التشغيل المحلي
+
+للوضع الأمثل الذي يشبه Vercel:
+
+```bash
+vercel dev
+```
+
+وللتطوير السريع عبر Vite فقط:
+
+```bash
+npm install
+npm run dev
+```
+
+في وضع `npm run dev` فقط، إذا لم تكن دالة `/api/chat` متاحة، سيستخدم التطبيق المفتاح المحلي المحفوظ في المتصفح كخطة بديلة.
+
+## أوامر التحقق
+
+```bash
+npm run lint
+npm run build
+```
+
+## خطوات النشر على GitHub و Vercel
+
+1. تأكد أن ملف `.env` غير مرفوع إلى GitHub.
+2. ارفع الكود إلى GitHub.
+3. افتح مشروعك في Vercel.
+4. من `Settings -> Environment Variables` أضف:
+   - `GOOGLE_API_KEY`
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+5. أعد النشر `Redeploy`.
+
+## ملاحظة عن خطأ الحصة
+
+إذا ظهرت رسالة `429 Quota exceeded` فهذا يعني أن الحصة الحالية لمفتاح Gemini انتهت أو تم الوصول لحد الطلبات. لا يمكن إصلاح ذلك برمجيًا بالكامل وحده. الحلول الصحيحة هي:
+
+- الانتظار حتى يعاد فتح الحصة.
+- تفعيل الفوترة أو ترقية الخطة في Google AI Studio.
+- استخدام مفتاح API آخر يملك حصة متاحة.
+
+التطبيق الآن يعرض هذه الحالة برسالة أوضح ويتعامل معها بشكل أفضل، لكن لا يستطيع تجاوز حدود Google نفسها.

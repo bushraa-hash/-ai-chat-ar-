@@ -30,7 +30,7 @@ export const Navbar = () => {
               </span>
             </Link>
           </div>
-          
+
           <div className="flex items-center gap-4">
             {user ? (
               <>
@@ -50,8 +50,8 @@ export const Navbar = () => {
               </>
             ) : (
               <div className="flex gap-2">
-                 <Link to="/login" className="text-gray-700 hover:text-primary dark:text-gray-300 transition-colors font-medium">تسجيل الدخول</Link>
-                 <Link to="/register" className="text-primary hover:text-purple-700 font-medium transition-colors">إنشاء حساب</Link>
+                <Link to="/login" className="text-gray-700 hover:text-primary dark:text-gray-300 transition-colors font-medium">تسجيل الدخول</Link>
+                <Link to="/register" className="text-primary hover:text-purple-700 font-medium transition-colors">إنشاء حساب</Link>
               </div>
             )}
           </div>

@@ -32,8 +32,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   const register = async (email, password, displayName) => {
-    const { error } = await supabase.auth.signUp({ 
-      email, 
+    const { error } = await supabase.auth.signUp({
+      email,
       password,
       options: {
         data: {
@@ -56,11 +56,16 @@ export const AuthProvider = ({ children }) => {
     if (error) throw error;
   };
 
+  const updatePassword = async (password) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw error;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session, login, register, logout, resetPassword, loading }}>
+    <AuthContext.Provider value={{ user, session, login, register, logout, resetPassword, updatePassword, loading }}>
       {loading ? (
         <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
-           جاري التحميل...
+          جاري التحميل...
         </div>
       ) : children}
     </AuthContext.Provider>

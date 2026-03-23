@@ -23,9 +23,9 @@ export default function Login() {
     } catch (err) {
       console.error(err);
       if (err.message && err.message.includes('Email not confirmed')) {
-        setError('يرجى تأكيد بريدك الإلكتروني أولاً. تحقق من صندوق الوارد (أو البريد غير المرغوب فيه).');
+        setError('يرجى تأكيد بريدك الإلكتروني أولًا. تحقق من صندوق الوارد أو البريد غير المرغوب فيه.');
       } else {
-        setError('فشل تسجيل الدخول. تأكد من البريد الإلكتروني وكلمة مورور صحيحة.');
+        setError('فشل تسجيل الدخول. تأكد من البريد الإلكتروني وكلمة المرور.');
       }
     } finally {
       setLoading(false);
@@ -35,18 +35,17 @@ export default function Login() {
   return (
     <div className="min-h-[calc(100vh-64px)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-slate-50 dark:bg-gray-900 transition-colors">
       <div className="max-w-md w-full space-y-8 bg-white dark:bg-gray-800 p-8 sm:p-10 rounded-2xl shadow-xl transition-all">
-        
         <div className="text-center">
-            <div className="mx-auto w-16 h-16 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white mb-4 shadow-lg">
-                <Bot size={32} />
-            </div>
-            <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white">تسجيل الدخول</h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                أو{' '}
-                <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
-                قم بإنشاء حساب جديد
-                </Link>
-            </p>
+          <div className="mx-auto w-16 h-16 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white mb-4 shadow-lg">
+            <Bot size={32} />
+          </div>
+          <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white">تسجيل الدخول</h2>
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+            أو{' '}
+            <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
+              قم بإنشاء حساب جديد
+            </Link>
+          </p>
         </div>
 
         {error && <div className="p-4 rounded-md bg-red-50 text-red-700 text-sm border border-red-200">{error}</div>}
